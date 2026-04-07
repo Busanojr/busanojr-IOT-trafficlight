@@ -1,675 +1,318 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title> Traffic light Command System</title>
-<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Exo+2:wght@300;400;600;700;900&family=Orbitron:wght@400;700;900&display=swap" rel="stylesheet">
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<audio id="audioHenshin" src="media/Henshin.mp3" loop></audio>
-<audio id="audioOOO"     src="media/OOO.mp3"     loop></audio>
-<style>
-:root {
-  --red:        #ff2d2d;
-  --red-dim:    #4a0a0a;
-  --red-glow:   rgba(255,45,45,0.6);
-  --yellow:     #ffb800;
-  --yellow-dim: #3a2800;
-  --yellow-glow:rgba(255,184,0,0.6);
-  --green:      #00e676;
-  --green-dim:  #003320;
-  --green-glow: rgba(0,230,118,0.6);
-  --gold:       #c8960c;
-  --gold-light: #f0c030;
-  --bg:         #07090f;
-  --surface:    #0d1119;
-  --border:     rgba(255,255,255,0.07);
-  --border2:    rgba(200,150,12,0.3);
-  --text:       #e2e8f0;
-  --text-dim:   #64748b;
-  --active:     var(--green);
-  --active-glow:var(--green-glow);
-}
-*{margin:0;padding:0;box-sizing:border-box}
-body{background:var(--bg);color:var(--text);font-family:'Exo 2',sans-serif;min-height:100vh;overflow-x:hidden;
-  background-image:radial-gradient(ellipse 80% 50% at 50% -10%,rgba(200,150,12,0.08) 0%,transparent 60%),
-  url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none'%3E%3Cg fill='%23ffffff' fill-opacity='0.015'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")}
-::-webkit-scrollbar{width:4px}::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-thumb{background:var(--border2);border-radius:4px}
+// ================================================================
+// ESP32 Traffic Light → Supabase (REST API + polling)
+// FIXED VERSION — LED debug + safer pins + robust error handling
+// ================================================================
+#include <WiFi.h>
+#include <HTTPClient.h>
+#include <ArduinoJson.h>
 
-/* HEADER */
-header{display:flex;align-items:center;justify-content:space-between;padding:12px 28px;border-bottom:1px solid var(--border2);background:linear-gradient(180deg,rgba(13,17,25,0.98),rgba(7,9,15,0.9));backdrop-filter:blur(20px);position:sticky;top:0;z-index:100}
-.logo-wrap{display:flex;align-items:center;gap:14px}
-.emblem{width:46px;height:46px;border-radius:50%;border:2px solid var(--gold);background:radial-gradient(circle at 40% 40%,#221400,#0a0a0a);display:flex;align-items:center;justify-content:center;box-shadow:0 0 20px rgba(200,150,12,0.35),inset 0 0 12px rgba(200,150,12,0.1);animation:embPulse 3s ease-in-out infinite;flex-shrink:0}
-@keyframes embPulse{0%,100%{box-shadow:0 0 20px rgba(200,150,12,0.35),inset 0 0 12px rgba(200,150,12,0.1)}50%{box-shadow:0 0 35px rgba(200,150,12,0.65),inset 0 0 20px rgba(200,150,12,0.25)}}
-.emblem svg{width:28px;height:28px}
-.title-area h1{font-family:'Orbitron',monospace;font-size:1.1rem;font-weight:900;letter-spacing:4px;color:var(--gold-light);text-shadow:0 0 20px rgba(200,150,12,0.5)}
-.title-area p{font-family:'Share Tech Mono',monospace;font-size:0.65rem;letter-spacing:3px;color:var(--text-dim);margin-top:2px}
-.hdr-right{display:flex;align-items:center;gap:10px}
-.badge{display:flex;align-items:center;gap:7px;padding:6px 13px;border:1px solid var(--border);border-radius:3px;font-family:'Share Tech Mono',monospace;font-size:0.7rem;letter-spacing:2px;background:rgba(255,255,255,0.02);white-space:nowrap}
-.bdot{width:7px;height:7px;border-radius:50%;background:#333;transition:all 0.4s;flex-shrink:0}
-.bdot.on{background:var(--green);box-shadow:0 0 8px var(--green)}.bdot.off{background:var(--red);box-shadow:0 0 8px var(--red)}
-.music-btn{display:flex;align-items:center;gap:8px;padding:6px 13px;border:1px solid var(--border);border-radius:3px;font-family:'Share Tech Mono',monospace;font-size:0.7rem;letter-spacing:2px;background:rgba(255,255,255,0.02);color:var(--text-dim);cursor:pointer;transition:all 0.2s}
-.music-btn:hover{border-color:var(--gold);color:var(--gold-light)}.music-btn.on{border-color:var(--green);color:var(--green);background:rgba(0,230,118,0.05)}
-.eq{display:flex;align-items:flex-end;gap:2px;height:14px}.eq span{width:2px;border-radius:1px;background:currentColor}
-.eq span:nth-child(1){height:30%}.eq span:nth-child(2){height:70%}.eq span:nth-child(3){height:50%}.eq span:nth-child(4){height:90%}
-.music-btn.on .eq span:nth-child(1){animation:e1 .5s ease-in-out infinite alternate}
-.music-btn.on .eq span:nth-child(2){animation:e2 .4s ease-in-out infinite alternate}
-.music-btn.on .eq span:nth-child(3){animation:e3 .6s ease-in-out infinite alternate}
-.music-btn.on .eq span:nth-child(4){animation:e4 .35s ease-in-out infinite alternate}
-@keyframes e1{from{height:15%}to{height:85%}}@keyframes e2{from{height:55%}to{height:25%}}
-@keyframes e3{from{height:35%}to{height:95%}}@keyframes e4{from{height:80%}to{height:15%}}
+// ----------------------------------------------------------------
+// ✅ FIX 1: Changed to safer GPIO pins (25/26 can misbehave on boot)
+// ----------------------------------------------------------------
+#define PIN_RED    16   // → RED LED    → 220Ω → GND
+#define PIN_YELLOW 17   // → YELLOW LED → 220Ω → GND
+#define PIN_GREEN  18   // → GREEN LED  → 220Ω → GND
 
-/* LAYOUT */
-.main{display:grid;grid-template-columns:300px 1fr 240px;gap:16px;padding:16px 20px;min-height:calc(100vh - 72px)}
-.panel{background:var(--surface);border:1px solid var(--border);border-radius:8px;overflow:hidden;position:relative}
-.panel::before{content:'';position:absolute;top:0;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,var(--gold),transparent);opacity:0.5}
-.phd{display:flex;align-items:center;gap:8px;padding:10px 14px;border-bottom:1px solid var(--border);font-family:'Orbitron',monospace;font-size:0.6rem;letter-spacing:3px;color:var(--gold);text-transform:uppercase}
-.phd::before{content:'';width:5px;height:5px;border-radius:1px;background:var(--gold);box-shadow:0 0 8px var(--gold);flex-shrink:0}
+// ----------------------------------------------------------------
+// WiFi credentials
+// ----------------------------------------------------------------
+#define WIFI_SSID     "POCO X6 Pro 5G"
+#define WIFI_PASSWORD "pocox6pro5g"
 
-/* LEFT PANEL */
-.tl-panel{display:flex;flex-direction:column}
-.tl-visual{display:flex;align-items:center;justify-content:center;padding:28px 0 20px;background:radial-gradient(ellipse at 50% 60%,rgba(0,0,0,0.5),transparent 70%);position:relative}
-.tl-visual::after{content:'';position:absolute;bottom:0;left:50%;transform:translateX(-50%) translateX(18px);width:6px;height:28px;background:linear-gradient(180deg,#2a3040,#1a2030);border-radius:0 0 3px 3px}
-.tl-box{background:linear-gradient(160deg,#1a1e2a,#0f1218);border:1.5px solid #2a3040;border-radius:20px;padding:16px 18px;display:flex;flex-direction:column;gap:12px;box-shadow:0 8px 40px rgba(0,0,0,0.8),inset 0 1px 0 rgba(255,255,255,0.05);position:relative;z-index:1}
-.tl-box::before{content:'';position:absolute;top:20px;right:-30px;width:30px;height:5px;background:linear-gradient(90deg,#2a3040,#1a2030);border-radius:0 3px 3px 0}
-.tl-bulb{width:80px;height:80px;border-radius:50%;border:2px solid #111;cursor:pointer;position:relative;transition:all 0.35s cubic-bezier(0.4,0,0.2,1)}
-.tl-bulb::after{content:'';position:absolute;top:12%;left:18%;width:28%;height:28%;border-radius:50%;background:rgba(255,255,255,0.15);pointer-events:none}
-.tl-bulb.r{background:radial-gradient(circle at 38% 38%,#2a0808,#110404)}
-.tl-bulb.y{background:radial-gradient(circle at 38% 38%,#1f1200,#0e0800)}
-.tl-bulb.g{background:radial-gradient(circle at 38% 38%,#001a0c,#000d06)}
-.tl-bulb.r.on{background:radial-gradient(circle at 38% 38%,#ff8888,#e02020);box-shadow:0 0 28px var(--red),0 0 60px rgba(255,45,45,0.3);border-color:rgba(255,45,45,0.5)}
-.tl-bulb.y.on{background:radial-gradient(circle at 38% 38%,#ffe08a,#cc9000);box-shadow:0 0 28px var(--yellow),0 0 60px rgba(255,184,0,0.3);border-color:rgba(255,184,0,0.5);animation:yBlink 0.85s ease-in-out infinite}
-@keyframes yBlink{0%,100%{opacity:1}50%{opacity:0.35}}
-.tl-bulb.g.on{background:radial-gradient(circle at 38% 38%,#80ffbb,#00b857);box-shadow:0 0 28px var(--green),0 0 60px rgba(0,230,118,0.3);border-color:rgba(0,230,118,0.5)}
-.bulb-tag{position:absolute;bottom:-18px;left:50%;transform:translateX(-50%);font-family:'Share Tech Mono',monospace;font-size:0.5rem;letter-spacing:2px;color:var(--text-dim);white-space:nowrap;pointer-events:none}
-
-.mode-ind{margin:0 14px 4px;padding:7px 12px;border-radius:6px;font-family:'Share Tech Mono',monospace;font-size:0.65rem;letter-spacing:2px;text-align:center;background:rgba(255,255,255,0.02);border:1px solid var(--border);color:var(--text-dim);transition:all 0.3s}
-.mode-ind.manual{background:rgba(200,150,12,0.1);border-color:var(--gold);color:var(--gold-light)}
-
-.ctrl-row{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;padding:14px 14px 0}
-.ctrl-btn{display:flex;flex-direction:column;align-items:center;gap:5px;padding:10px 4px;border:1px solid var(--border);border-radius:6px;background:rgba(255,255,255,0.02);color:var(--text-dim);font-family:'Orbitron',monospace;font-size:0.55rem;letter-spacing:1.5px;cursor:pointer;transition:all 0.2s;text-transform:uppercase}
-.cdot{width:12px;height:12px;border-radius:50%;background:#222;transition:all 0.2s}
-.ctrl-btn.r:hover,.ctrl-btn.r.sel{border-color:var(--red);color:var(--red);background:rgba(255,45,45,0.08)}
-.ctrl-btn.r:hover .cdot,.ctrl-btn.r.sel .cdot{background:var(--red);box-shadow:0 0 8px var(--red)}
-.ctrl-btn.y:hover,.ctrl-btn.y.sel{border-color:var(--yellow);color:var(--yellow);background:rgba(255,184,0,0.08)}
-.ctrl-btn.y:hover .cdot,.ctrl-btn.y.sel .cdot{background:var(--yellow);box-shadow:0 0 8px var(--yellow)}
-.ctrl-btn.g:hover,.ctrl-btn.g.sel{border-color:var(--green);color:var(--green);background:rgba(0,230,118,0.08)}
-.ctrl-btn.g:hover .cdot,.ctrl-btn.g.sel .cdot{background:var(--green);box-shadow:0 0 8px var(--green)}
-.ctrl-btn.dis{opacity:0.35!important;pointer-events:none!important}
-
-.mode-row{display:grid;grid-template-columns:1fr 1fr;gap:8px;padding:10px 14px}
-.mode-btn{padding:10px;border:1px solid var(--border);border-radius:6px;background:rgba(255,255,255,0.02);color:var(--text-dim);font-family:'Exo 2',sans-serif;font-size:0.75rem;font-weight:700;letter-spacing:2px;cursor:pointer;transition:all 0.2s;text-transform:uppercase}
-.mode-btn:hover{border-color:var(--gold);color:var(--gold-light)}
-.mode-btn.active{border-color:var(--gold);color:var(--gold-light);background:rgba(200,150,12,0.1);box-shadow:inset 0 0 16px rgba(200,150,12,0.08)}
-
-.timer-wrap{padding:0 14px 14px}
-.timer-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
-.timer-lbl{font-family:'Share Tech Mono',monospace;font-size:0.65rem;letter-spacing:2px;color:var(--text-dim)}
-.timer-num{font-family:'Orbitron',monospace;font-size:1.5rem;font-weight:700;color:var(--active);text-shadow:0 0 12px var(--active-glow);transition:color 0.3s,text-shadow 0.3s;min-width:54px;text-align:right}
-.timer-track{height:3px;background:rgba(255,255,255,0.06);border-radius:2px;overflow:hidden}
-.timer-fill{height:100%;border-radius:2px;background:var(--active);box-shadow:0 0 6px var(--active-glow);transition:width 0.9s linear,background 0.3s}
-
-.dur-wrap{padding:10px 14px 14px;border-top:1px solid var(--border)}
-.dur-lbl{font-family:'Share Tech Mono',monospace;font-size:0.6rem;letter-spacing:2px;color:var(--text-dim);margin-bottom:8px;display:block}
-.dur-inputs{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
-.dur-g label{display:block;font-family:'Share Tech Mono',monospace;font-size:0.55rem;letter-spacing:2px;margin-bottom:4px}
-.dur-g label.r{color:var(--red)}.dur-g label.y{color:var(--yellow)}.dur-g label.g{color:var(--green)}
-.dur-g input{width:100%;padding:7px 6px;background:rgba(255,255,255,0.03);border:1px solid var(--border);border-radius:4px;color:var(--text);font-family:'Orbitron',monospace;font-size:0.85rem;text-align:center;transition:border-color 0.2s}
-.dur-g input:focus{outline:none;border-color:var(--gold)}
-
-/* CENTER */
-.road-panel{display:flex;flex-direction:column}
-.road-wrap{flex:1;position:relative;background:#070a10;overflow:hidden}
-canvas{display:block;width:100%;height:100%}
-.road-hud{position:absolute;bottom:12px;right:12px;display:flex;align-items:center;gap:8px;background:rgba(7,9,15,0.85);border:1px solid var(--border);border-radius:4px;padding:7px 13px;font-family:'Share Tech Mono',monospace;font-size:0.68rem;letter-spacing:2px;color:var(--text-dim);backdrop-filter:blur(8px)}
-.rdot{width:9px;height:9px;border-radius:50%;transition:all 0.3s;flex-shrink:0}
-
-/* RIGHT */
-.right-col{display:flex;flex-direction:column;gap:14px}
-.mini-tl{display:flex;gap:8px;align-items:center;justify-content:center;padding:12px 0}
-.mini-b{width:20px;height:20px;border-radius:50%;transition:all 0.3s}
-.mini-b.r{background:var(--red-dim)}.mini-b.r.on{background:var(--red);box-shadow:0 0 12px var(--red)}
-.mini-b.y{background:var(--yellow-dim)}.mini-b.y.on{background:var(--yellow);box-shadow:0 0 12px var(--yellow);animation:yBlink 0.85s ease-in-out infinite}
-.mini-b.g{background:var(--green-dim)}.mini-b.g.on{background:var(--green);box-shadow:0 0 12px var(--green)}
-.stats{padding:0 14px 12px;display:flex;flex-direction:column}
-.stat-row{display:flex;justify-content:space-between;align-items:center;padding:9px 0;border-bottom:1px solid rgba(255,255,255,0.04)}
-.stat-row:last-child{border-bottom:none}
-.sk{font-family:'Share Tech Mono',monospace;font-size:0.6rem;letter-spacing:2px;color:var(--text-dim)}
-.sv{font-family:'Orbitron',monospace;font-size:0.85rem;font-weight:700;color:var(--text)}
-.sv.r{color:var(--red)}.sv.y{color:var(--yellow)}.sv.g{color:var(--green)}.sv.gold{color:var(--gold-light)}
-
-.log-panel{flex:1;display:flex;flex-direction:column}
-.log-body{padding:10px 12px;overflow-y:auto;flex:1;max-height:260px}
-.log-entry{display:flex;align-items:flex-start;gap:7px;padding:5px 0;border-bottom:1px solid rgba(255,255,255,0.03);animation:slideIn 0.25s ease}
-@keyframes slideIn{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:translateY(0)}}
-.log-t{font-family:'Share Tech Mono',monospace;font-size:0.58rem;letter-spacing:1px;color:var(--text-dim);white-space:nowrap;padding-top:2px}
-.log-d{width:5px;height:5px;border-radius:50%;flex-shrink:0;margin-top:4px}
-.log-m{font-size:0.7rem;color:var(--text);line-height:1.4}
-
-.wire-table{padding:10px 14px}
-.wire-row{display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid rgba(255,255,255,0.04)}
-.wire-row:last-child{border-bottom:none}
-.wire-sw{width:28px;height:8px;border-radius:4px;flex-shrink:0}
-.wire-pin{font-family:'Orbitron',monospace;font-size:0.65rem;color:var(--gold-light);flex-shrink:0;min-width:40px}
-.wire-desc{color:var(--text-dim);font-size:0.68rem}
-
-@media(max-width:900px){.main{grid-template-columns:1fr}.road-wrap{height:300px}}
-</style>
-</head>
-<body>
-<header>
-  <div class="logo-wrap">
-    <div class="emblem">
-      <svg viewBox="0 0 32 32" fill="none">
-        <circle cx="16" cy="16" r="13" stroke="#c8960c" stroke-width="1.2"/>
-        <path d="M16 4 L19.5 11.5 L27.5 12.5 L22 18 L23.5 26 L16 22.5 L8.5 26 L10 18 L4.5 12.5 L12.5 11.5 Z" fill="#c8960c" opacity="0.8"/>
-        <circle cx="16" cy="16" r="3.5" fill="#ff2d2d"/>
-        <circle cx="16" cy="16" r="1.5" fill="#ff9090"/>
-      </svg>
-    </div>
-    <div class="title-area">
-      <h1>RTA UNAHAN BOSS </h1>
-      <p>ESP32 · SUPABASE RT · RED-YELLOW-GREEN</p>
-    </div>
-  </div>
-  <div class="hdr-right">
-    <div class="badge"><div class="bdot" id="sbDot"></div><span id="sbTxt">CONNECTING</span></div>
-    <button class="music-btn" id="musicBtn" onclick="toggleMusic()">
-      <div class="eq"><span></span><span></span><span></span><span></span></div>
-      <span id="musicTxt">OOO BGM</span>
-    </button>
-    <div class="badge"><div class="bdot" id="espDot"></div><span id="espTxt">ESP32</span></div>
-  </div>
-</header>
-
-<div class="main">
-  <!-- LEFT -->
-  <div class="panel tl-panel">
-    <div class="phd">Signal Control Unit</div>
-    <div class="tl-visual">
-      <div class="tl-box">
-        <div class="tl-bulb r" id="tlR" onclick="manualSet('red')" style="position:relative"><span class="bulb-tag">STOP</span></div>
-        <div class="tl-bulb y" id="tlY" onclick="manualSet('yellow')" style="position:relative"><span class="bulb-tag">CAUTION</span></div>
-        <div class="tl-bulb g" id="tlG" onclick="manualSet('green')" style="position:relative"><span class="bulb-tag">GO</span></div>
-      </div>
-    </div>
-    <div class="mode-ind" id="modeInd">⚙ AUTO CYCLE RUNNING</div>
-    <div class="ctrl-row">
-      <button class="ctrl-btn r dis" id="cbR" onclick="manualSet('red')"><div class="cdot"></div>STOP</button>
-      <button class="ctrl-btn y dis" id="cbY" onclick="manualSet('yellow')"><div class="cdot"></div>CAUTION</button>
-      <button class="ctrl-btn g dis" id="cbG" onclick="manualSet('green')"><div class="cdot"></div>GO</button>
-    </div>
-    <div class="mode-row">
-      <button class="mode-btn" id="manBtn" onclick="setMode('manual')">Manual</button>
-      <button class="mode-btn active" id="autoBtn" onclick="setMode('auto')">Auto Cycle</button>
-    </div>
-    <div class="timer-wrap">
-      <div class="timer-head">
-        <span class="timer-lbl">PHASE TIMER</span>
-        <span class="timer-num" id="timerDisp">--</span>
-      </div>
-      <div class="timer-track"><div class="timer-fill" id="timerFill" style="width:100%"></div></div>
-    </div>
-    <div class="dur-wrap">
-      <span class="dur-lbl">AUTO DURATIONS (seconds)</span>
-      <div class="dur-inputs">
-        <div class="dur-g"><label class="r">RED</label><input type="number" id="dR" value="30" min="1" max="999" onchange="pushDurations()"></div>
-        <div class="dur-g"><label class="y">YEL</label><input type="number" id="dY" value="5"  min="1" max="999" onchange="pushDurations()"></div>
-        <div class="dur-g"><label class="g">GRN</label><input type="number" id="dG" value="25" min="1" max="999" onchange="pushDurations()"></div>
-      </div>
-    </div>
-  </div>
-
-  <!-- CENTER -->
-  <div class="panel road-panel">
-    <div class="phd">Live Road Simulation</div>
-    <div class="road-wrap">
-      <canvas id="cv"></canvas>
-      <div class="road-hud"><div class="rdot" id="rdot"></div><span id="rstat">CONNECTING...</span></div>
-    </div>
-  </div>
-
-  <!-- RIGHT -->
-  <div class="right-col">
-    <div class="panel">
-      <div class="phd">System Status</div>
-      <div class="mini-tl">
-        <div class="mini-b r" id="mR"></div>
-        <div class="mini-b y" id="mY"></div>
-        <div class="mini-b g" id="mG"></div>
-      </div>
-      <div class="stats">
-        <div class="stat-row"><span class="sk">SIGNAL</span><span class="sv" id="svSig">--</span></div>
-        <div class="stat-row"><span class="sk">MODE</span><span class="sv gold" id="svMode">--</span></div>
-        <div class="stat-row"><span class="sk">CYCLES</span><span class="sv" id="svCycles">0</span></div>
-        <div class="stat-row"><span class="sk">UPTIME</span><span class="sv" id="svUptime">--:--</span></div>
-        <div class="stat-row"><span class="sk">CARS PASSED</span><span class="sv g" id="svCars">0</span></div>
-        <div class="stat-row"><span class="sk">ESP32 IP</span><span class="sv" id="svIP" style="font-size:0.6rem">--</span></div>
-      </div>
-    </div>
-
-    <div class="panel">
-      <div class="phd">Wiring Guide</div>
-      <div class="wire-table">
-        <div class="wire-row"><div class="wire-sw" style="background:#cc2222"></div><span class="wire-pin">GPIO25</span><span class="wire-desc">RED LED → 220Ω → GND</span></div>
-        <div class="wire-row"><div class="wire-sw" style="background:#ccaa00"></div><span class="wire-pin">GPIO26</span><span class="wire-desc">YELLOW LED → 220Ω → GND</span></div>
-        <div class="wire-row"><div class="wire-sw" style="background:#007744"></div><span class="wire-pin">GPIO27</span><span class="wire-desc">GREEN/BLUE LED → 220Ω → GND</span></div>
-        <div class="wire-row"><div class="wire-sw" style="background:#222244"></div><span class="wire-pin">GND</span><span class="wire-desc">Common ground (all LEDs)</span></div>
-        <div class="wire-row"><div class="wire-sw" style="background:#3333aa"></div><span class="wire-pin">VIN/5V</span><span class="wire-desc">USB power input</span></div>
-      </div>
-    </div>
-
-    <div class="panel log-panel" style="flex:1">
-      <div class="phd">Event Log</div>
-      <div class="log-body" id="logBody"></div>
-    </div>
-  </div>
-</div>
-
-<script>
-// ══════════════════════════════════════════════════════════
-// ⚠ SUPABASE CREDENTIALS — SAME as ESP32 Arduino code
-//   HTML ug ESP32 KINAHANGLAN mag-match!
-// ══════════════════════════════════════════════════════════
+// ----------------------------------------------------------------
+// Supabase credentials
+// ----------------------------------------------------------------
 const SURL = 'https://lcaphxnedhlktrtyghkr.supabase.co';
 const SKEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxjYXBoeG5lZGhsa3RydHlnaGtyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ4NTE0NzAsImV4cCI6MjA5MDQyNzQ3MH0.6xyFUqhqjS4tghmvrD7zDho81JaJ-Ygs_ON42JokcsA';
+#define SUPA_TABLE "traffic_light"
+#define SUPA_ROW   "id=eq.1"
 
-const { createClient } = supabase;
-const sb = createClient(SURL, SKEY);
+#define POLL_INTERVAL 2000
 
-async function sbPatch(fields) {
-  const { error } = await sb.from('traffic_light').upsert({ id:1, ...fields }, { onConflict:'id' });
-  if (error) console.error('PATCH error:', error.message);
-}
-async function sbGet() {
-  const { data, error } = await sb.from('traffic_light').select('*').eq('id',1).single();
-  if (error) { console.error('GET error:', error.message); return null; }
-  return data;
-}
+// ----------------------------------------------------------------
+// State
+// ----------------------------------------------------------------
+String        currentSignal = "red";
+String        currentMode   = "auto";
+int           durRed        = 30;
+int           durYellow     = 5;
+int           durGreen      = 25;
+int           autoPhase     = 0;
+unsigned long phaseStart    = 0;
+unsigned long lastPoll      = 0;
 
-// ── State ──────────────────────────────────────────────────
-let sig = 'red', mode = 'auto';
-let cycles = 0, carsPassed = 0;
-let prevSig = '', prevMode = '';
-let dispTimer = null, dispMax = 30, dispLeft = 30;
+const char* phaseNames[] = {"red", "yellow", "green"};
 
-const colMap  = { red:'--red',    yellow:'--yellow',    green:'--green'    };
-const glowMap = { red:'--red-glow', yellow:'--yellow-glow', green:'--green-glow' };
+// ----------------------------------------------------------------
+// ✅ FIX 2: applySignal — now prints which pin goes HIGH for debug
+// ----------------------------------------------------------------
+void applySignal(const String& signal) {
+  digitalWrite(PIN_RED,    LOW);
+  digitalWrite(PIN_YELLOW, LOW);
+  digitalWrite(PIN_GREEN,  LOW);
 
-// ── setActive ──────────────────────────────────────────────
-function setActive(color) {
-  const c = `var(${colMap[color]})`;
-  const g = `var(${glowMap[color]})`;
-  document.documentElement.style.setProperty('--active', c);
-  document.documentElement.style.setProperty('--active-glow', g);
-
-  document.getElementById('tlR').classList.toggle('on', color==='red');
-  document.getElementById('tlY').classList.toggle('on', color==='yellow');
-  document.getElementById('tlG').classList.toggle('on', color==='green');
-  document.getElementById('mR').classList.toggle('on', color==='red');
-  document.getElementById('mY').classList.toggle('on', color==='yellow');
-  document.getElementById('mG').classList.toggle('on', color==='green');
-
-  const el = document.getElementById('svSig');
-  el.textContent = color.toUpperCase();
-  el.className = 'sv ' + {red:'r',yellow:'y',green:'g'}[color];
-
-  const rdot = document.getElementById('rdot');
-  rdot.style.background = c;
-  rdot.style.boxShadow  = `0 0 8px ${g}`;
-  document.getElementById('rstat').textContent = {
-    red:'RED · ALL STOP', yellow:'YELLOW · CAUTION', green:'GREEN · FLOW ACTIVE'
-  }[color];
-
-  document.querySelectorAll('.ctrl-btn').forEach(b => b.classList.remove('sel'));
-  const btns = document.querySelectorAll('.ctrl-btn');
-  const idx = {red:0,yellow:1,green:2}[color];
-  if (btns[idx]) btns[idx].classList.add('sel');
-
-  sig = color;
-}
-
-// ── manualSet ──────────────────────────────────────────────
-async function manualSet(color) {
-  if (mode !== 'manual') {
-    const ind = document.getElementById('modeInd');
-    const orig = ind.textContent;
-    ind.textContent = '⚠ SWITCH TO MANUAL FIRST!';
-    ind.style.borderColor = 'var(--red)';
-    ind.style.color = 'var(--red)';
-    setTimeout(() => { ind.textContent = orig; applyModeUI(mode); }, 1200);
-    return;
-  }
-  setActive(color);
-  stopDispTimer();
-  log(`Dashboard → ${color.toUpperCase()} (manual)`, color);
-  await sbPatch({ signal:color, updated_at:new Date().toISOString() });
-}
-
-// ── setMode ────────────────────────────────────────────────
-async function setMode(m) {
-  mode = m;
-  applyModeUI(m);
-  syncHenshin(m);
-  if (m === 'auto') stopDispTimer();
-  log(`Mode → ${m.toUpperCase()}`, 'gold');
-  await sbPatch({ mode:m });
-}
-
-// ── applyModeUI ────────────────────────────────────────────
-function applyModeUI(m) {
-  document.getElementById('manBtn').classList.toggle('active', m==='manual');
-  document.getElementById('autoBtn').classList.toggle('active', m==='auto');
-  document.getElementById('svMode').textContent = m.toUpperCase();
-
-  const isManual = m === 'manual';
-  ['cbR','cbY','cbG'].forEach(id => document.getElementById(id).classList.toggle('dis', !isManual));
-  ['tlR','tlY','tlG'].forEach(id => {
-    const el = document.getElementById(id);
-    el.style.pointerEvents = isManual ? 'auto' : 'none';
-    el.style.opacity       = isManual ? '1'    : '0.6';
-  });
-
-  const ind = document.getElementById('modeInd');
-  ind.textContent = isManual ? '🕹 MANUAL CONTROL ACTIVE' : '⚙ AUTO CYCLE RUNNING';
-  ind.style.borderColor = '';
-  ind.style.color = '';
-  ind.classList.toggle('manual', isManual);
-}
-
-// ── Timer ──────────────────────────────────────────────────
-function startDispTimer(color, durMap) {
-  stopDispTimer();
-  if (mode !== 'auto') return;
-  dispMax  = durMap[color] || 10;
-  dispLeft = dispMax;
-  refreshTimer();
-  dispTimer = setInterval(() => { dispLeft = Math.max(0, dispLeft-1); refreshTimer(); }, 1000);
-}
-function stopDispTimer() {
-  if (dispTimer) { clearInterval(dispTimer); dispTimer = null; }
-  document.getElementById('timerDisp').textContent = '--';
-  document.getElementById('timerFill').style.width = '100%';
-}
-function refreshTimer() {
-  document.getElementById('timerDisp').textContent = dispLeft + 's';
-  document.getElementById('timerFill').style.width = (dispLeft / dispMax * 100) + '%';
-}
-
-async function pushDurations() {
-  await sbPatch({
-    dur_red:    +document.getElementById('dR').value || 30,
-    dur_yellow: +document.getElementById('dY').value || 5,
-    dur_green:  +document.getElementById('dG').value || 25,
-  });
-  log('Durations updated', 'gold');
-}
-
-// ── handleSnap ─────────────────────────────────────────────
-function handleSnap(d) {
-  if (!d) return;
-
-  document.getElementById('espDot').className = 'bdot ' + (d.esp32_online ? 'on' : 'off');
-  document.getElementById('espTxt').textContent = d.esp32_online ? 'ESP32 OK' : 'ESP32 OFF';
-  if (d.ip) document.getElementById('svIP').textContent = d.ip;
-  if (d.uptime !== undefined) {
-    const mm = Math.floor(d.uptime/60).toString().padStart(2,'0');
-    const ss = (d.uptime%60).toString().padStart(2,'0');
-    document.getElementById('svUptime').textContent = `${mm}:${ss}`;
-  }
-  if (d.dur_red    != null) document.getElementById('dR').value = d.dur_red;
-  if (d.dur_yellow != null) document.getElementById('dY').value = d.dur_yellow;
-  if (d.dur_green  != null) document.getElementById('dG').value = d.dur_green;
-
-  if (d.mode && d.mode !== prevMode) {
-    prevMode = d.mode;
-    if (d.mode !== mode) {
-      mode = d.mode;
-      applyModeUI(mode);
-      syncHenshin(mode);
-      log(`Mode synced ← ${mode.toUpperCase()}`, 'gold');
-    }
-  }
-
-  if (d.signal && d.signal !== prevSig) {
-    const isAuto = mode === 'auto';
-    if (isAuto && prevSig !== '') {
-      if (d.signal === 'red') { cycles++; document.getElementById('svCycles').textContent = cycles; }
-      startDispTimer(d.signal, {
-        red:    d.dur_red    || +document.getElementById('dR').value || 30,
-        yellow: d.dur_yellow || +document.getElementById('dY').value || 5,
-        green:  d.dur_green  || +document.getElementById('dG').value || 25,
-      });
-    }
-    setActive(d.signal);
-    if (!isAuto) stopDispTimer();
-    log(`Signal ← ${d.signal.toUpperCase()} (${isAuto ? 'auto/ESP32' : 'manual'})`, d.signal);
-    prevSig = d.signal;
-  }
-}
-
-// ── Init ───────────────────────────────────────────────────
-(async () => {
-  const d = await sbGet();
-  const ok = d !== null;
-  document.getElementById('sbDot').className = 'bdot ' + (ok ? 'on' : 'off');
-  document.getElementById('sbTxt').textContent = ok ? 'SUPABASE OK' : 'DISCONNECTED';
-  log(ok ? 'Supabase connected' : 'Supabase error — check console', ok ? 'green' : 'red');
-  if (ok) {
-    if (d.mode) { mode = d.mode; prevMode = d.mode; applyModeUI(mode); }
-    handleSnap(d);
-  }
-})();
-
-sb.channel('tl_rt')
-  .on('postgres_changes',
-    { event:'*', schema:'public', table:'traffic_light', filter:'id=eq.1' },
-    p => handleSnap(p.new))
-  .subscribe(s => { if (s === 'SUBSCRIBED') log('Realtime channel active','green'); });
-
-// ── Log ────────────────────────────────────────────────────
-function log(msg, color) {
-  const wrap = document.getElementById('logBody');
-  const t = new Date().toTimeString().slice(0,8);
-  const cc = {red:'var(--red)',yellow:'var(--yellow)',green:'var(--green)',gold:'var(--gold-light)'}[color]||'#445566';
-  const el = document.createElement('div');
-  el.className = 'log-entry';
-  el.innerHTML = `<span class="log-t">${t}</span><div class="log-d" style="background:${cc};box-shadow:0 0 5px ${cc}"></div><span class="log-m">${msg}</span>`;
-  wrap.insertBefore(el, wrap.firstChild);
-  if (wrap.children.length > 60) wrap.lastChild.remove();
-}
-
-// ── Audio ──────────────────────────────────────────────────
-const aH = document.getElementById('audioHenshin');
-const aO = document.getElementById('audioOOO');
-let musicOn = false;
-
-function syncHenshin(m) {
-  if (m === 'auto') aH.play().catch(()=>{});
-  else aH.pause();
-}
-function toggleMusic() {
-  const btn = document.getElementById('musicBtn');
-  if (musicOn) {
-    aO.pause(); musicOn = false;
-    btn.classList.remove('on');
-    document.getElementById('musicTxt').textContent = 'OOO BGM';
+  if (signal == "red") {
+    digitalWrite(PIN_RED, HIGH);
+    Serial.println("[LED] RED ON  → GPIO" + String(PIN_RED));
+  } else if (signal == "yellow") {
+    digitalWrite(PIN_YELLOW, HIGH);
+    Serial.println("[LED] YELLOW ON → GPIO" + String(PIN_YELLOW));
+  } else if (signal == "green") {
+    digitalWrite(PIN_GREEN, HIGH);
+    Serial.println("[LED] GREEN ON  → GPIO" + String(PIN_GREEN));
   } else {
-    aO.play().catch(()=>{}); musicOn = true;
-    btn.classList.add('on');
-    document.getElementById('musicTxt').textContent = 'PLAYING';
+    Serial.println("[LED] Unknown signal: " + signal);
   }
 }
 
-// ══════════════════════════════════════════════════════════
-// ROAD CANVAS
-// ══════════════════════════════════════════════════════════
-const cv  = document.getElementById('cv');
-const ctx = cv.getContext('2d');
-
-function resize() { cv.width = cv.parentElement.clientWidth; cv.height = cv.parentElement.clientHeight; }
-resize();
-window.addEventListener('resize', resize);
-
-const CAR_W = 44, CAR_H = 22;
-const CAR_COLORS = ['#e02020','#00b857','#c8960c','#2255cc','#cc5020','#8844aa','#22aacc','#dd4488'];
-let cars = [], carId = 0;
-
-function spawn() {
-  cars.push({ id:carId++, x:-70, lane:Math.floor(Math.random()*3),
-    color:CAR_COLORS[Math.floor(Math.random()*CAR_COLORS.length)],
-    spd:1.4+Math.random()*1.4, passed:false });
-}
-function laneY(lane, H) {
-  const rTop = H*0.35, rH = H*0.45;
-  return rTop + (rH/3)*lane + (rH/3)/2;
-}
-function shade(hex, amt) {
-  const n = parseInt(hex.slice(1),16);
-  const cl = v => Math.min(255,Math.max(0,v));
-  const r=cl((n>>16)+amt), g=cl(((n>>8)&0xff)+amt), b=cl((n&0xff)+amt);
-  return `#${((1<<24)|(r<<16)|(g<<8)|b).toString(16).slice(1)}`;
+int phaseDuration(int phase) {
+  if (phase == 0) return durRed;
+  if (phase == 1) return durYellow;
+  return durGreen;
 }
 
-function draw() {
-  const W = cv.width, H = cv.height;
-  ctx.clearRect(0,0,W,H);
-
-  // Sky
-  const sky = ctx.createLinearGradient(0,0,0,H*0.35);
-  sky.addColorStop(0,'#04060e'); sky.addColorStop(1,'#0c1520');
-  ctx.fillStyle=sky; ctx.fillRect(0,0,W,H*0.35);
-
-  // Stars
-  ctx.fillStyle='rgba(255,255,255,0.55)';
-  for(let i=0;i<80;i++){
-    ctx.beginPath(); ctx.arc(i*137.5%W, i*89.3%(H*0.32), i%5===0?1:0.5, 0, Math.PI*2); ctx.fill();
+// ----------------------------------------------------------------
+// Supabase PATCH
+// ----------------------------------------------------------------
+bool supaPatch(JsonDocument& body) {
+  if (WiFi.status() != WL_CONNECTED) {
+    Serial.println("[WiFi] Not connected — skipping PATCH");
+    return false;
   }
 
-  const rTop=H*0.35, rH=H*0.45;
+  String jsonStr;
+  serializeJson(body, jsonStr);
 
-  // Road
-  const road=ctx.createLinearGradient(0,rTop,0,rTop+rH);
-  road.addColorStop(0,'#181c26'); road.addColorStop(0.5,'#12151e'); road.addColorStop(1,'#0c0f18');
-  ctx.fillStyle=road; ctx.fillRect(0,rTop,W,rH);
+  HTTPClient http;
+  String url = String(SUPA_URL) + "/rest/v1/" + SUPA_TABLE + "?" + SUPA_ROW;
+  http.begin(url);
+  http.addHeader("Content-Type",  "application/json");
+  http.addHeader("apikey",        SUPA_KEY);
+  http.addHeader("Authorization", "Bearer " + String(SUPA_KEY));
+  http.addHeader("Prefer",        "return=minimal");
+  http.setTimeout(8000); // ✅ FIX 3: Added timeout so it doesn't hang
 
-  // Road edges
-  ctx.strokeStyle='rgba(200,150,12,0.6)'; ctx.lineWidth=2;
-  ctx.beginPath(); ctx.moveTo(0,rTop); ctx.lineTo(W,rTop); ctx.stroke();
-  ctx.beginPath(); ctx.moveTo(0,rTop+rH); ctx.lineTo(W,rTop+rH); ctx.stroke();
+  int code = http.PATCH(jsonStr);
+  bool ok  = (code == 200 || code == 204);
+  if (ok)  Serial.println("[Supabase] PATCH OK (" + String(code) + ")");
+  else     Serial.println("[Supabase] PATCH FAILED (" + String(code) + ")");
+  http.end();
+  return ok;
+}
 
-  // Lane dashes
-  const lH=rH/3;
-  ctx.setLineDash([22,18]); ctx.strokeStyle='rgba(255,255,220,0.15)'; ctx.lineWidth=1;
-  for(let l=1;l<3;l++){ ctx.beginPath(); ctx.moveTo(0,rTop+lH*l); ctx.lineTo(W,rTop+lH*l); ctx.stroke(); }
-  ctx.setLineDash([]);
+// ----------------------------------------------------------------
+// Supabase GET
+// ----------------------------------------------------------------
+bool supaGet(JsonDocument& doc) {
+  if (WiFi.status() != WL_CONNECTED) return false;
 
-  // Ground
-  const grd=ctx.createLinearGradient(0,rTop+rH,0,H);
-  grd.addColorStop(0,'#0c1018'); grd.addColorStop(1,'#050708');
-  ctx.fillStyle=grd; ctx.fillRect(0,rTop+rH,W,H-rTop-rH);
+  HTTPClient http;
+  String url = String(SUPA_URL) + "/rest/v1/" + SUPA_TABLE
+               + "?" + SUPA_ROW + "&limit=1";
+  http.begin(url);
+  http.addHeader("apikey",        SUPA_KEY);
+  http.addHeader("Authorization", "Bearer " + String(SUPA_KEY));
+  http.addHeader("Accept",        "application/json");
+  http.setTimeout(8000); // ✅ FIX 3: Added timeout
 
-  // Traffic light pole
-  const tlX=W*0.68, pB=rTop;
-  ctx.strokeStyle='#888'; ctx.lineWidth=3;
-  ctx.beginPath(); ctx.moveTo(tlX,pB); ctx.lineTo(tlX,pB-95); ctx.stroke();
-  ctx.beginPath(); ctx.moveTo(tlX,pB-95); ctx.lineTo(tlX+34,pB-95); ctx.stroke();
-  ctx.fillStyle='#181c26'; ctx.strokeStyle='#333'; ctx.lineWidth=1.5;
-  ctx.beginPath();
-  if(ctx.roundRect) ctx.roundRect(tlX+20,pB-116,30,78,5); else ctx.rect(tlX+20,pB-116,30,78);
-  ctx.fill(); ctx.stroke();
+  int code = http.GET();
+  if (code != 200) {
+    Serial.println("[Supabase] GET FAILED (" + String(code) + ")");
+    http.end();
+    return false;
+  }
 
-  // Bulbs on canvas traffic light
-  [{yOff:-112,active:sig==='red',   ac:'#ff4444',dc:'#1a0404'},
-   {yOff:-90, active:sig==='yellow',ac:'#ffcc00',dc:'#140e00'},
-   {yOff:-68, active:sig==='green', ac:'#00e676',dc:'#001008'}
-  ].forEach(b=>{
-    ctx.beginPath(); ctx.arc(tlX+35,pB+b.yOff+8,9,0,Math.PI*2);
-    ctx.shadowColor=b.active?b.ac:'transparent'; ctx.shadowBlur=b.active?20:0;
-    ctx.fillStyle=b.active?b.ac:b.dc; ctx.fill(); ctx.shadowBlur=0;
-  });
+  String payload = http.getString();
+  http.end();
 
-  // Stop line
-  const STOP_X = tlX - 8;
-  ctx.strokeStyle='rgba(255,255,255,0.55)'; ctx.lineWidth=3;
-  ctx.beginPath(); ctx.moveTo(STOP_X,rTop); ctx.lineTo(STOP_X,rTop+rH); ctx.stroke();
+  JsonDocument arr;
+  DeserializationError err = deserializeJson(arr, payload);
+  if (err || !arr.is<JsonArray>() || arr.as<JsonArray>().size() == 0) {
+    Serial.println("[Supabase] JSON parse error");
+    return false;
+  }
 
-  // Crosswalk
-  ctx.fillStyle='rgba(255,255,255,0.07)';
-  for(let s=0;s<6;s++) ctx.fillRect(STOP_X-38+s*6,rTop,3,rH);
+  doc.set(arr[0]);
+  return true;
+}
 
-  // ── Car update logic ──────────────────────────────────────
-  // STOP_FRONT = where car front stops at red/yellow
-  const STOP_FRONT = STOP_X - CAR_W/2 - 6;
-  const GAP = CAR_W + 10;
+// ================================================================
+void setup() {
+  Serial.begin(115200);
+  delay(500);
+  Serial.println("\n\n=== Traffic Light System — FIXED VERSION ===");
 
-  [0,1,2].forEach(lane => {
-    // Sort descending by x = front cars first
-    const lc = cars.filter(c=>c.lane===lane).sort((a,b)=>b.x-a.x);
-    lc.forEach((car,i)=>{
-      const leader = i===0 ? null : lc[i-1];
+  // ✅ FIX 4: Set pins as OUTPUT first, before anything else
+  pinMode(PIN_RED,    OUTPUT);
+  pinMode(PIN_YELLOW, OUTPUT);
+  pinMode(PIN_GREEN,  OUTPUT);
 
-      // Once a car's FRONT passes the stop line, mark it
-      if(car.x > STOP_FRONT && !car.passed) car.passed = true;
+  // Force all LOW first to clear any floating state
+  digitalWrite(PIN_RED,    LOW);
+  digitalWrite(PIN_YELLOW, LOW);
+  digitalWrite(PIN_GREEN,  LOW);
+  delay(100);
 
-      // Not-yet-passed + not green → stop before line
-      const stopLim   = (!car.passed && sig!=='green') ? STOP_FRONT : Infinity;
-      const leaderLim = leader ? leader.x - GAP : Infinity;
-      const limit = Math.min(stopLim, leaderLim);
+  // ✅ FIX 5: LED blink test BEFORE WiFi/Supabase
+  // If LEDs don't light up here → it's a wiring/hardware problem
+  Serial.println("[INIT] === LED BLINK TEST — check your LEDs now ===");
 
-      if(car.x < limit) car.x = Math.min(car.x + car.spd, limit);
-    });
-  });
+  Serial.println("[INIT] RED ON");
+  digitalWrite(PIN_RED, HIGH);
+  delay(800);
+  digitalWrite(PIN_RED, LOW);
+  delay(200);
 
-  // Draw cars
-  for(let i=cars.length-1;i>=0;i--){
-    const car=cars[i];
-    const y=laneY(car.lane,H);
-    ctx.save(); ctx.translate(car.x,y);
+  Serial.println("[INIT] YELLOW ON");
+  digitalWrite(PIN_YELLOW, HIGH);
+  delay(800);
+  digitalWrite(PIN_YELLOW, LOW);
+  delay(200);
 
-    // Shadow
-    ctx.fillStyle='rgba(0,0,0,0.35)';
-    ctx.fillRect(-CAR_W/2+4,5,CAR_W-2,9);
+  Serial.println("[INIT] GREEN ON");
+  digitalWrite(PIN_GREEN, HIGH);
+  delay(800);
+  digitalWrite(PIN_GREEN, LOW);
+  delay(200);
 
-    // Body
-    const bg=ctx.createLinearGradient(-CAR_W/2,-CAR_H/2,CAR_W/2,CAR_H/2);
-    bg.addColorStop(0,car.color); bg.addColorStop(1,shade(car.color,-35));
-    ctx.fillStyle=bg;
-    ctx.beginPath();
-    if(ctx.roundRect) ctx.roundRect(-CAR_W/2,-CAR_H/2,CAR_W,CAR_H,4);
-    else ctx.rect(-CAR_W/2,-CAR_H/2,CAR_W,CAR_H);
-    ctx.fill();
+  // All on together
+  Serial.println("[INIT] ALL ON");
+  digitalWrite(PIN_RED,    HIGH);
+  digitalWrite(PIN_YELLOW, HIGH);
+  digitalWrite(PIN_GREEN,  HIGH);
+  delay(600);
+  digitalWrite(PIN_RED,    LOW);
+  digitalWrite(PIN_YELLOW, LOW);
+  digitalWrite(PIN_GREEN,  LOW);
 
-    // Window
-    ctx.fillStyle='rgba(140,220,255,0.25)';
-    ctx.fillRect(-CAR_W/2+24,-CAR_H/2+4,10,CAR_H-8);
+  Serial.println("[INIT] === LED BLINK TEST DONE ===");
+  Serial.println("[INIT] If no LEDs blinked, check:");
+  Serial.println("       1. Wiring: GPIO → LED(+) → 220Ω → GND");
+  Serial.println("       2. LED polarity (long leg = + = to GPIO)");
+  Serial.println("       3. Resistor value (try 100Ω if 220Ω too dim)");
+  Serial.println("       4. Try different GPIOs");
+  delay(500);
 
-    // Headlights
-    ctx.fillStyle='rgba(255,240,170,0.9)'; ctx.shadowColor='#ffe090'; ctx.shadowBlur=8;
-    ctx.fillRect(CAR_W/2-4,-CAR_H/2+4,4,5);
-    ctx.fillRect(CAR_W/2-4,CAR_H/2-9,4,5);
+  // Connect WiFi
+  Serial.print("[WiFi] Connecting to: ");
+  Serial.println(WIFI_SSID);
+  WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
 
-    // Taillights
-    ctx.shadowBlur=0; ctx.fillStyle='#ff2020';
-    ctx.fillRect(-CAR_W/2,-CAR_H/2+4,3,5);
-    ctx.fillRect(-CAR_W/2,CAR_H/2-9,3,5);
+  int attempts = 0;
+  while (WiFi.status() != WL_CONNECTED && attempts < 40) {
+    delay(500);
+    Serial.print(".");
+    attempts++;
+  }
 
-    ctx.restore();
+  if (WiFi.status() == WL_CONNECTED) {
+    Serial.println("\n[WiFi] Connected! IP: " + WiFi.localIP().toString());
+  } else {
+    Serial.println("\n[WiFi] FAILED — running offline, LEDs still work in auto mode");
+  }
 
-    if(car.x > W+90){
-      if(car.passed){ carsPassed++; document.getElementById('svCars').textContent=carsPassed; }
-      cars.splice(i,1);
+  // Write initial state to Supabase (only if WiFi connected)
+  if (WiFi.status() == WL_CONNECTED) {
+    JsonDocument initBody;
+    initBody["signal"]       = currentSignal;
+    initBody["mode"]         = currentMode;
+    initBody["dur_red"]      = durRed;
+    initBody["dur_yellow"]   = durYellow;
+    initBody["dur_green"]    = durGreen;
+    initBody["esp32_online"] = true;
+    initBody["ip"]           = WiFi.localIP().toString();
+    initBody["uptime"]       = 0;
+
+    if (supaPatch(initBody)) {
+      Serial.println("[INIT] Supabase init OK");
+    } else {
+      Serial.println("[INIT] Supabase init FAILED — check table/key/network");
+    }
+  }
+
+  // ✅ Apply initial signal to LED
+  applySignal(currentSignal);
+  phaseStart = millis();
+  Serial.println("[INIT] System ready! Auto cycling started.\n");
+}
+
+// ================================================================
+void loop() {
+
+  // ── Poll Supabase for commands ────────────────────────────
+  if (millis() - lastPoll >= POLL_INTERVAL) {
+    lastPoll = millis();
+
+    // ✅ FIX 6: Skip poll if WiFi not connected (prevents hang)
+    if (WiFi.status() != WL_CONNECTED) {
+      Serial.println("[WiFi] Offline — skipping poll");
+    } else {
+      JsonDocument row;
+      if (supaGet(row)) {
+
+        if (!row["mode"].isNull()) {
+          String newMode = row["mode"].as<String>();
+          if (newMode != currentMode) {
+            Serial.println("[Mode] Changed: " + currentMode + " → " + newMode);
+            currentMode = newMode;
+            phaseStart  = millis();
+          }
+        }
+
+        if (!row["dur_red"].isNull())    durRed    = row["dur_red"].as<int>();
+        if (!row["dur_yellow"].isNull()) durYellow = row["dur_yellow"].as<int>();
+        if (!row["dur_green"].isNull())  durGreen  = row["dur_green"].as<int>();
+
+        if (currentMode == "manual" && !row["signal"].isNull()) {
+          String demanded = row["signal"].as<String>();
+          if (demanded != currentSignal) {
+            Serial.println("[Manual] Signal demanded: " + demanded);
+            currentSignal = demanded;
+            applySignal(currentSignal);
+          }
+        }
+
+      } else {
+        Serial.println("[Supabase] Poll failed");
+      }
+    }
+  }
+
+  // ── Auto cycle ────────────────────────────────────────────
+  if (currentMode == "auto") {
+    unsigned long elapsed = (millis() - phaseStart) / 1000;
+    if (elapsed >= (unsigned long)phaseDuration(autoPhase)) {
+      autoPhase     = (autoPhase + 1) % 3;
+      phaseStart    = millis();
+      currentSignal = phaseNames[autoPhase];
+      applySignal(currentSignal);
+
+      if (WiFi.status() == WL_CONNECTED) {
+        JsonDocument sigBody;
+        sigBody["signal"] = currentSignal;
+        supaPatch(sigBody);
+      }
+    }
+  }
+
+  // ── Heartbeat every 10s ───────────────────────────────────
+  static unsigned long lastHB = 0;
+  if (millis() - lastHB > 10000 && WiFi.status() == WL_CONNECTED) {
+    lastHB = millis();
+    JsonDocument hb;
+    hb["uptime"]       = (int)(millis() / 1000);
+    hb["esp32_online"] = true;
+    hb["ip"]           = WiFi.localIP().toString();
+    supaPatch(hb);
+  }
+
+  // ── WiFi watchdog ─────────────────────────────────────────
+  if (WiFi.status() != WL_CONNECTED) {
+    static unsigned long lastReconnect = 0;
+    if (millis() - lastReconnect > 10000) { // try every 10s only
+      lastReconnect = millis();
+      Serial.println("[WiFi] Disconnected — reconnecting...");
+      WiFi.reconnect();
     }
   }
 }
-
-setInterval(()=>{ if(cars.length<14) spawn(); }, 1600);
-for(let i=0;i<5;i++) setTimeout(spawn,i*500);
-function loop(){ draw(); requestAnimationFrame(loop); }
-loop();
-
-log('OOO Traffic Command initialized','gold');
-log('Awaiting Supabase connection...','gold');
-</script>
-</body>
-</html>
